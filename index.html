@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARC Lab · 출결</title>
+
+<!-- ============================================================
+     [설정] 아래 값을 채우면 됩니다. 자세한 절차는 README.md 참고.
+       1) Firebase 콘솔에서 프로젝트 생성 → 웹 앱 등록 → firebaseConfig 복사
+       2) Firestore 사용 설정 + 보안 규칙(README) 적용
+       3) Authentication → 이메일/비밀번호 사용 설정 + 관리자 계정 1개 생성
+     ※ 관리자 비밀번호는 소스에 두지 않습니다.
+        Firebase Authentication 이 직접 관리하며, 여기엔 이메일만 적습니다.
+     ============================================================ -->
+<script>
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyD_kaanw7A3eakAjXeO4ddpZzwJLs4hJrY",
+    authDomain: "arc-attendance-9c803.firebaseapp.com",
+    projectId: "arc-attendance-9c803",
+    storageBucket: "arc-attendance-9c803.firebasestorage.app",
+    messagingSenderId: "850232889335",
+    appId: "1:850232889335:web:d83b9de7810c2b0975e8f2"
+  };
+  // 관리자 로그인에 쓸 이메일 (콘솔에서 이 이메일로 사용자 1개 생성). 비밀번호는 여기 두지 않음.
+  window.ADMIN_EMAIL = "admin@arclab.app";
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap');
+
+:root{
+  --bg:#0a0c10; --panel:#12151b; --panel-2:#161a22; --line:#242a34; --line-2:#2f3744;
+  --txt:#e9edf3; --txt-2:#9aa4b2; --txt-3:#626d7d; --accent:#c2f24a; --accent-dim:#8ba830;
+  --s-present:#34d399; --s-late:#f5b73d; --s-trip:#46b6f0; --s-personal:#a98bf5; --s-absent:#f0617a;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; font-family:'IBM Plex Sans KR',sans-serif; color:var(--txt); min-height:100vh;
+  background:
+    radial-gradient(900px 500px at 80% -10%, rgba(194,242,74,0.07), transparent 60%),
+    radial-gradient(700px 500px at 0% 110%, rgba(70,182,240,0.06), transparent 55%),
+    var(--bg);
+  background-attachment:fixed;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; opacity:.5; z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(circle at 50% 30%, #000, transparent 85%);
+          mask-image:radial-gradient(circle at 50% 30%, #000, transparent 85%);
+}
+.mono{font-family:'JetBrains Mono',monospace;} .disp{font-family:'Sora',sans-serif;}
+.wrap{max-width:1000px; margin:0 auto; padding:30px 20px 90px; position:relative; z-index:1;}
+
+.top{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:26px; flex-wrap:wrap;}
+.brandtag{font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.32em; color:var(--accent-dim); text-transform:uppercase;}
+.brand{font-family:'Sora',sans-serif; font-weight:800; font-size:clamp(26px,4.5vw,40px); line-height:1.05; letter-spacing:-.02em;}
+.brand .amp{color:var(--accent);}
+.brandsub{color:var(--txt-2); font-size:13px; margin-top:6px;}
+.live{display:inline-flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--txt-2); border:1px solid var(--line); border-radius:99px; padding:5px 11px;}
+.dot-live{width:7px;height:7px;border-radius:50%; background:var(--accent); animation:pulse 1.8s infinite;}
+.dot-live.off{background:var(--s-absent); animation:none;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(194,242,74,.45)}70%{box-shadow:0 0 0 7px rgba(194,242,74,0)}100%{box-shadow:0 0 0 0 rgba(194,242,74,0)}}
+
+.banner{background:rgba(240,97,122,.1); border:1px solid var(--s-absent); border-radius:12px; padding:14px 16px; margin-bottom:22px; font-size:13.5px; color:#ffd2da;}
+.banner code{font-family:'JetBrains Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:5px;}
+
+.cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+.cal-month{font-family:'Sora',sans-serif; font-weight:700; font-size:22px; display:flex; align-items:baseline; gap:10px;}
+.cal-month .yr{font-family:'JetBrains Mono',monospace; color:var(--txt-3); font-size:14px;}
+.navbtn{background:var(--panel); border:1px solid var(--line); color:var(--txt); width:38px; height:38px; border-radius:10px; cursor:pointer; font-size:16px; transition:.15s;}
+.navbtn:hover{border-color:var(--accent); color:var(--accent);}
+
+.legend{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:18px;}
+.legend span{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--txt-2);}
+.legend i{width:9px; height:9px; border-radius:3px; display:inline-block;}
+
+.grid{display:grid; grid-template-columns:repeat(7,1fr); gap:8px;}
+.wd{text-align:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--txt-3); padding-bottom:6px; letter-spacing:.1em;}
+.wd.sun{color:#e06b80;} .wd.sat{color:#6bb6e0;}
+.cell{min-height:84px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:9px; cursor:pointer; transition:.15s; position:relative; overflow:hidden;}
+.cell:hover{border-color:var(--line-2); transform:translateY(-2px); background:var(--panel-2);}
+.cell.blank{background:transparent; border-color:transparent; cursor:default;}
+.cell.blank:hover{transform:none;}
+.cell.today{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset, 0 8px 24px -16px rgba(194,242,74,.6);}
+.cell .dn{font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--txt-2);}
+.cell.today .dn{color:var(--accent); font-weight:700;}
+.cell.sun .dn{color:#e06b80;} .cell.sat .dn{color:#6bb6e0;}
+.daydots{display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;}
+.dchip{display:inline-flex; align-items:center; gap:3px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--txt-2); background:rgba(255,255,255,.03); border-radius:5px; padding:2px 5px;}
+.dchip i{width:6px; height:6px; border-radius:50%;}
+
+.scrim{position:fixed; inset:0; background:rgba(5,6,9,.66); backdrop-filter:blur(4px); display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; z-index:50; overflow-y:auto; animation:fade .18s ease;}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{width:100%; max-width:560px; background:var(--panel); border:1px solid var(--line-2); border-radius:18px; padding:24px; box-shadow:0 30px 80px -30px rgba(0,0,0,.8); animation:rise .22s cubic-bezier(.2,.8,.2,1);}
+@keyframes rise{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;}
+.modal-title{font-family:'Sora',sans-serif; font-weight:700; font-size:19px;}
+.modal-sub{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--txt-3); margin-top:3px;}
+.x{background:none; border:none; color:var(--txt-2); font-size:22px; cursor:pointer; line-height:1;}
+.x:hover{color:var(--txt);}
+
+.srow{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 2px; border-bottom:1px solid var(--line);}
+.srow:last-child{border-bottom:none;}
+.sname{font-weight:600; font-size:15px;}
+.ssid{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--txt-3);}
+.statebar{display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;}
+.st{cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--txt-2); padding:6px 9px; font-size:12px; font-family:'IBM Plex Sans KR',sans-serif; transition:.12s; white-space:nowrap;}
+.st:hover{border-color:var(--line-2); color:var(--txt);}
+
+.btn{cursor:pointer; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#0c1003; font-weight:700; padding:10px 16px; font-size:14px; font-family:'IBM Plex Sans KR',sans-serif; transition:.15s;}
+.btn:hover{filter:brightness(1.06);} .btn:disabled{opacity:.4; cursor:not-allowed;}
+.btn-ghost{background:var(--panel-2); color:var(--txt); border-color:var(--line); font-weight:500;}
+.btn-ghost:hover{border-color:var(--line-2);}
+
+.field{width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:var(--panel-2); color:var(--txt); font-size:15px; font-family:'IBM Plex Sans KR',sans-serif;}
+.field:focus{outline:none; border-color:var(--accent);}
+.label{font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.1em; color:var(--txt-3); text-transform:uppercase; display:block; margin-bottom:6px;}
+
+.admin-fab{position:fixed; right:18px; bottom:18px; width:46px; height:46px; border-radius:14px; background:var(--panel); border:1px solid var(--line-2); color:var(--txt-2); cursor:pointer; z-index:40; display:flex; align-items:center; justify-content:center; transition:.15s; box-shadow:0 12px 30px -16px rgba(0,0,0,.7);}
+.admin-fab:hover{color:var(--accent); border-color:var(--accent);}
+
+.tabs{display:flex; gap:6px; margin-bottom:18px;}
+.tabs button{font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.06em; cursor:pointer; background:transparent; border:1px solid var(--line); color:var(--txt-2); padding:8px 13px; border-radius:9px; transition:.12s;}
+.tabs button.on{background:var(--accent); color:#0c1003; border-color:var(--accent); font-weight:700;}
+
+.bar-track{height:7px; background:rgba(255,255,255,.05); border-radius:99px; overflow:hidden;}
+.bar-fill{height:100%; border-radius:99px; background:linear-gradient(90deg, var(--s-present), var(--accent));}
+.pill{display:inline-flex; align-items:center; gap:5px; font-family:'JetBrains Mono',monospace; font-size:11px; padding:3px 8px; border-radius:7px; background:rgba(255,255,255,.04); color:var(--txt-2);}
+.pill i{width:7px; height:7px; border-radius:50%;}
+
+.muted{color:var(--txt-2); font-size:13px;}
+.empty{text-align:center; padding:30px 12px; color:var(--txt-3); font-size:14px;}
+.spin{width:26px; height:26px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; margin:34px auto;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.shake{animation:shk .35s;}
+@keyframes shk{10%,90%{transform:translateX(-1px)}30%,70%{transform:translateX(4px)}50%{transform:translateX(-6px)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brandtag">ARC LAB · ATTENDANCE</div>
+      <div class="brand">Autonomous Robotics <span class="amp">&amp;</span> Control</div>
+      <div class="brandsub">연구실 출결 현황 · 날짜를 눌러 출결을 기록하세요</div>
+    </div>
+    <div class="live"><span class="dot-live" id="liveDot"></span><span id="liveTxt">연결 중…</span></div>
+  </header>
+
+  <div id="setupBanner" class="banner" style="display:none;">
+    ⚙️ 설정이 필요합니다. 파일 상단 <code>FIREBASE_CONFIG</code>를 채우고,
+    Firestore·Authentication 설정(README)을 완료하세요.
+  </div>
+
+  <div class="cal-head">
+    <div class="cal-month"><span id="monthLabel">—</span> <span class="yr mono" id="yearLabel"></span></div>
+    <div style="display:flex; gap:8px;">
+      <button class="navbtn" id="prevBtn">‹</button>
+      <button class="navbtn" id="todayBtn">•</button>
+      <button class="navbtn" id="nextBtn">›</button>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <div class="grid" id="calGrid"></div>
+</div>
+
+<button class="admin-fab" id="adminBtn" title="관리자">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+  </svg>
+</button>
+
+<div id="modalRoot"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs, query, where, orderBy, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+/* ===================== 상수 / 유틸 ===================== */
+const STATUS = [
+  { key:"present",  label:"출석",     v:"--s-present" },
+  { key:"late",     label:"지각",     v:"--s-late" },
+  { key:"trip",     label:"출장",     v:"--s-trip" },
+  { key:"personal", label:"개인사정", v:"--s-personal" },
+  { key:"absent",   label:"결석",     v:"--s-absent" },
+];
+const pad = n => String(n).padStart(2,"0");
+const dStr = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
+const todayStr = () => { const d=new Date(); return dStr(d.getFullYear(),d.getMonth(),d.getDate()); };
+const uid = () => "s_"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc = s => (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function fmtFull(s){ const [y,m,d]=s.split("-").map(Number);
+  const w=["일","월","화","수","목","금","토"][new Date(y,m-1,d).getDay()];
+  return `${y}. ${pad(m)}. ${pad(d)} · ${w}요일`; }
+function monthRange(y,m){ const start=dStr(y,m,1); const ny=m===11?y+1:y, nm=m===11?0:m+1; return {start, end:dStr(ny,nm,1)}; }
+
+/* ===================== 상태 ===================== */
+const state = {
+  cursor: (()=>{ const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })(),
+  monthRows: [],   // [{date,sid,status}]
+  monthData: {},   // date -> {status:count}
+  roster: [],
+  selDate: null,
+  dayRecs: {},
+  adminUser: null,
+};
+let adminTab = "roster";
+
+/* ===================== Firebase ===================== */
+const cfg = window.FIREBASE_CONFIG;
+const ADMIN_EMAIL = window.ADMIN_EMAIL;
+const configured = cfg && cfg.apiKey && !cfg.apiKey.includes("YOUR_API_KEY") && cfg.projectId && !cfg.projectId.includes("YOUR_PROJECT");
+let app=null, db=null, auth=null, unsubMonth=null, unsubRoster=null;
+
+/* ===================== 렌더: 달력 ===================== */
+function buildMonthData(rows){
+  const md={}; rows.forEach(r=>{ if(!md[r.date])md[r.date]={}; md[r.date][r.status]=(md[r.date][r.status]||0)+1; }); return md;
+}
+function dayRecsFor(date){ const m={}; state.monthRows.forEach(r=>{ if(r.date===date) m[r.sid]=r.status; }); return m; }
+
+function renderLegend(){
+  document.getElementById("legend").innerHTML =
+    STATUS.map(s=>`<span><i style="background:var(${s.v})"></i>${s.label}</span>`).join("");
+}
+function renderCalendar(){
+  const {y,m} = state.cursor;
+  document.getElementById("monthLabel").textContent = `${m+1}월`;
+  document.getElementById("yearLabel").textContent = y;
+  const first = new Date(y,m,1).getDay();
+  const days = new Date(y,m+1,0).getDate();
+  const today = todayStr();
+  let html = ["일","월","화","수","목","금","토"]
+    .map((w,i)=>`<div class="wd ${i===0?'sun':i===6?'sat':''}">${w}</div>`).join("");
+  for(let i=0;i<first;i++) html += `<div class="cell blank"></div>`;
+  for(let d=1; d<=days; d++){
+    const date = dStr(y,m,d);
+    const wd = (first + d - 1) % 7;
+    const data = state.monthData[date] || {};
+    const dots = STATUS.filter(s=>data[s.key])
+      .map(s=>`<span class="dchip"><i style="background:var(${s.v})"></i>${data[s.key]}</span>`).join("");
+    html += `<div class="cell ${date===today?'today':''} ${wd===0?'sun':wd===6?'sat':''}" data-date="${date}">
+      <div class="dn">${d}</div><div class="daydots">${dots}</div></div>`;
+  }
+  document.getElementById("calGrid").innerHTML = html;
+}
+
+/* ===================== 구독 (실시간) ===================== */
+function setLive(ok, txt){
+  document.getElementById("liveDot").classList.toggle("off", !ok);
+  document.getElementById("liveTxt").textContent = txt;
+}
+function subscribeMonth(){
+  if(!configured){ renderCalendar(); return; }
+  if(unsubMonth) unsubMonth();
+  const {start,end} = monthRange(state.cursor.y, state.cursor.m);
+  const qy = query(collection(db,"attendance"), where("date",">=",start), where("date","<",end));
+  unsubMonth = onSnapshot(qy, snap=>{
+    const rows=[]; snap.forEach(d=>{ const v=d.data(); rows.push({date:v.date, sid:v.sid, status:v.status}); });
+    state.monthRows = rows;
+    state.monthData = buildMonthData(rows);
+    renderCalendar();
+    setLive(true, "공유됨 · 실시간");
+    if(state.selDate && document.getElementById("dayModal")){ state.dayRecs = dayRecsFor(state.selDate); renderDay(); }
+  }, err=>{ console.error(err); setLive(false, "연결 오류"); });
+}
+function subscribeRoster(){
+  if(!configured) return;
+  if(unsubRoster) unsubRoster();
+  const qy = query(collection(db,"roster"), orderBy("created_at","asc"));
+  unsubRoster = onSnapshot(qy, snap=>{
+    const rs=[]; snap.forEach(d=>{ const v=d.data(); rs.push({id:d.id, name:v.name, sid:v.sid||""}); });
+    state.roster = rs;
+    if(state.selDate && document.getElementById("dayModal")) renderDay();
+    if(document.getElementById("adminBody") && adminTab==="roster") renderRoster();
+  }, err=>console.error(err));
+}
+
+/* ===================== 모달: 날짜별 출결 ===================== */
+function modalRoot(){ return document.getElementById("modalRoot"); }
+function closeModal(){ modalRoot().innerHTML=""; state.selDate=null; }
+
+function openDay(date){
+  state.selDate = date;
+  state.dayRecs = configured ? dayRecsFor(date) : (state.dayRecs && state.selDate===date ? state.dayRecs : {});
+  renderDay();
+}
+function dayCounts(){
+  const c={}; STATUS.forEach(s=>c[s.key]=0);
+  Object.values(state.dayRecs).forEach(st=>{ if(c[st]!==undefined) c[st]++; });
+  return c;
+}
+function renderDay(){
+  const date = state.selDate;
+  const c = dayCounts();
+  const pills = STATUS.map(s=>`<span class="pill"><i style="background:var(${s.v})"></i>${s.label} ${c[s.key]}</span>`).join("");
+  const list = state.roster.length===0
+    ? `<p class="empty">등록된 학생이 없습니다. 우측 하단 관리자 메뉴에서 명단을 추가하세요.</p>`
+    : state.roster.map(st=>{
+        const cur = state.dayRecs[st.id];
+        const btns = STATUS.map(s=>{
+          const on = cur===s.key;
+          const style = on ? `style="background:var(${s.v});color:#0b0d10;border-color:var(${s.v});font-weight:700"` : "";
+          return `<button class="st" ${style} data-sid="${st.id}" data-status="${s.key}">${s.label}</button>`;
+        }).join("");
+        return `<div class="srow"><div><div class="sname">${esc(st.name)}</div>${st.sid?`<div class="ssid">${esc(st.sid)}</div>`:""}</div>
+          <div class="statebar">${btns}</div></div>`;
+      }).join("");
+  modalRoot().innerHTML = `<div class="scrim" data-close="1"><div class="modal" id="dayModal">
+    <div class="modal-head"><div>
+      <div class="modal-title">${fmtFull(date)}</div>
+      <div class="modal-sub">${state.roster.length}명 · 항목을 눌러 기록 / 다시 누르면 해제</div>
+    </div><button class="x" data-close="1">×</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">${pills}</div>
+    ${list}</div></div>`;
+}
+async function toggleStatus(sid, status){
+  const cur = state.dayRecs[sid];
+  if(!configured){ if(cur===status) delete state.dayRecs[sid]; else state.dayRecs[sid]=status; renderDay(); return; }
+  const id = `${state.selDate}__${sid}`;
+  try{
+    if(cur===status) await deleteDoc(doc(db,"attendance",id));
+    else await setDoc(doc(db,"attendance",id), { date:state.selDate, sid, status, updated_at:Date.now() });
+  }catch(e){ console.error(e); alert("저장에 실패했습니다. 잠시 후 다시 시도하세요."); }
+  // onSnapshot 이 자동으로 화면을 갱신합니다.
+}
+
+/* ===================== 모달: 관리자 ===================== */
+function openAdminFlow(){
+  if(!configured){ openAdmin(); return; }
+  if(state.adminUser){ openAdmin(); return; }
+  modalRoot().innerHTML = `<div class="scrim" data-close="1"><div class="modal" id="pwModal" style="max-width:380px">
+    <div class="modal-head"><div><div class="modal-title">관리자 인증</div><div class="modal-sub">RESTRICTED ACCESS</div></div>
+      <button class="x" data-close="1">×</button></div>
+    <label class="label">비밀번호</label>
+    <input type="password" class="field" id="pwInput" autofocus />
+    <p id="pwErr" style="color:var(--s-absent);font-size:12.5px;margin-top:8px;display:none">비밀번호가 올바르지 않습니다.</p>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" data-close="1">취소</button>
+      <button class="btn" id="pwOk">입장</button></div>
+  </div></div>`;
+  const input = document.getElementById("pwInput");
+  const okBtn = document.getElementById("pwOk");
+  const fail = ()=>{ document.getElementById("pwErr").style.display="block";
+    const mm=document.getElementById("pwModal"); mm.classList.add("shake"); setTimeout(()=>mm.classList.remove("shake"),400); };
+  const submit = async ()=>{
+    const pw = input.value; if(!pw) return;
+    okBtn.disabled=true; okBtn.textContent="확인 중…";
+    try{
+      await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pw);
+      openAdmin(); return;
+    }catch(e){
+      okBtn.disabled=false; okBtn.textContent="입장"; input.value=""; input.focus(); fail();
+    }
+  };
+  okBtn.onclick = submit;
+  input.onkeydown = e=>{ if(e.key==="Enter") submit(); };
+}
+function openAdmin(){
+  state.selDate = null;
+  modalRoot().innerHTML = `<div class="scrim" data-close="1"><div class="modal" style="max-width:620px">
+    <div class="modal-head"><div><div class="modal-title">관리자</div><div class="modal-sub">ARC LAB · ADMIN CONSOLE</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${configured ? `<button class="btn btn-ghost" id="logoutBtn" style="padding:7px 11px">로그아웃</button>` : ""}
+        <button class="x" data-close="1">×</button></div></div>
+    <div class="tabs">
+      <button id="tabRoster" class="${adminTab==='roster'?'on':''}">명단 관리</button>
+      <button id="tabStats" class="${adminTab==='stats'?'on':''}">통계</button>
+    </div>
+    <div id="adminBody"></div></div></div>`;
+  document.getElementById("tabRoster").onclick = ()=>{ adminTab="roster"; openAdmin(); };
+  document.getElementById("tabStats").onclick  = ()=>{ adminTab="stats";  openAdmin(); };
+  const lo = document.getElementById("logoutBtn");
+  if(lo) lo.onclick = async ()=>{ try{ await signOut(auth); }catch(e){} closeModal(); };
+  if(adminTab==="roster") renderRoster(); else renderStats();
+}
+function renderRoster(){
+  const body = document.getElementById("adminBody"); if(!body) return;
+  const list = state.roster.length===0 ? `<p class="empty">등록된 학생이 없습니다.</p>`
+    : state.roster.map(st=>`<div class="srow"><div><div class="sname">${esc(st.name)}</div>${st.sid?`<div class="ssid">${esc(st.sid)}</div>`:""}</div>
+        <button class="btn btn-ghost" data-del="${st.id}">삭제</button></div>`).join("");
+  body.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px;">
+      <div style="flex:2;min-width:130px"><label class="label">이름</label><input class="field" id="rName" placeholder="예: 김서연"></div>
+      <div style="flex:2;min-width:120px"><label class="label">학번/메모 (선택)</label><input class="field" id="rSid" placeholder="예: 박사과정 2년"></div>
+      <button class="btn" id="rAdd">추가</button></div>
+    ${list}<p class="muted mono" style="margin-top:14px">TOTAL ${state.roster.length}</p>`;
+  const nameEl=document.getElementById("rName"), sidEl=document.getElementById("rSid");
+  const add = async ()=>{
+    const name=nameEl.value.trim(); if(!name) return;
+    const stu={ id:uid(), name, sid:sidEl.value.trim() };
+    if(configured){
+      try{ await setDoc(doc(db,"roster",stu.id), { name:stu.name, sid:stu.sid, created_at:Date.now() }); }
+      catch(e){ console.error(e); alert("추가 실패: 관리자 권한/규칙을 확인하세요."); }
+    } else { state.roster.push(stu); renderRoster(); }
+  };
+  document.getElementById("rAdd").onclick = add;
+  nameEl.onkeydown = sidEl.onkeydown = e=>{ if(e.key==="Enter") add(); };
+  body.querySelectorAll("[data-del]").forEach(b=>b.onclick = async ()=>{
+    const id=b.getAttribute("data-del");
+    if(configured){ try{ await deleteDoc(doc(db,"roster",id)); }catch(e){ console.error(e); } }
+    else { state.roster=state.roster.filter(x=>x.id!==id); renderRoster(); }
+  });
+}
+async function renderStats(){
+  const body = document.getElementById("adminBody"); if(!body) return;
+  body.innerHTML = `<div class="spin"></div>`;
+  let rows=[];
+  if(configured){
+    try{ const snap = await getDocs(collection(db,"attendance")); snap.forEach(d=>{ const v=d.data(); rows.push({date:v.date, sid:v.sid, status:v.status}); }); }
+    catch(e){ console.error(e); }
+  }
+  const bySid={}; const dateSet=new Set();
+  rows.forEach(r=>{ dateSet.add(r.date);
+    if(!bySid[r.sid]) bySid[r.sid]={present:0,late:0,trip:0,personal:0,absent:0};
+    if(bySid[r.sid][r.status]!==undefined) bySid[r.sid][r.status]++; });
+  const list = state.roster.length===0 ? `<p class="empty">명단이 비어 있습니다.</p>`
+    : state.roster.map(st=>{
+        const c = bySid[st.id] || {present:0,late:0,trip:0,personal:0,absent:0};
+        const total = c.present+c.late+c.trip+c.personal+c.absent;
+        const rate = total ? Math.round(((c.present+c.late+c.trip)/total)*100) : 0;
+        const pills = STATUS.map(s=>`<span class="pill"><i style="background:var(${s.v})"></i>${s.label} ${c[s.key]}</span>`).join("");
+        return `<div style="padding:14px 2px;border-bottom:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div class="sname">${esc(st.name)} ${st.sid?`<span class="ssid">· ${esc(st.sid)}</span>`:""}</div>
+            <div class="mono" style="font-size:17px;color:var(--accent)">${rate}<span style="font-size:12px;color:var(--txt-3)">%</span></div></div>
+          <div class="bar-track" style="margin:9px 0 10px"><div class="bar-fill" style="width:${rate}%"></div></div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">${pills}</div></div>`;
+      }).join("");
+  body.innerHTML = `<p class="muted" style="margin-bottom:16px">기록된 날짜 <b class="mono">${dateSet.size}</b>일 · 출근율 = (출석+지각+출장) / 본인 기록 일수</p>${list}`;
+}
+
+/* ===================== 이벤트 ===================== */
+document.getElementById("prevBtn").onclick = ()=>{ let {y,m}=state.cursor; m--; if(m<0){m=11;y--;} state.cursor={y,m}; subscribeMonth(); renderCalendar(); };
+document.getElementById("nextBtn").onclick = ()=>{ let {y,m}=state.cursor; m++; if(m>11){m=0;y++;} state.cursor={y,m}; subscribeMonth(); renderCalendar(); };
+document.getElementById("todayBtn").onclick = ()=>{ const d=new Date(); state.cursor={y:d.getFullYear(),m:d.getMonth()}; subscribeMonth(); renderCalendar(); };
+document.getElementById("adminBtn").onclick = openAdminFlow;
+
+document.getElementById("calGrid").addEventListener("click", e=>{
+  const cell = e.target.closest(".cell[data-date]"); if(cell) openDay(cell.getAttribute("data-date"));
+});
+modalRoot().addEventListener("click", e=>{
+  if(e.target.getAttribute("data-close")==="1"){ closeModal(); return; }
+  const stBtn = e.target.closest(".st[data-sid]");
+  if(stBtn){ toggleStatus(stBtn.getAttribute("data-sid"), stBtn.getAttribute("data-status")); }
+});
+
+/* ===================== 초기화 ===================== */
+function init(){
+  renderLegend();
+  renderCalendar();
+  if(!configured){
+    document.getElementById("setupBanner").style.display="block";
+    setLive(false, "미설정");
+    return;
+  }
+  try{
+    app = initializeApp(cfg);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    onAuthStateChanged(auth, u=>{ state.adminUser = u || null; });
+    setLive(true, "공유됨 · 실시간");
+    subscribeMonth();
+    subscribeRoster();
+  }catch(err){
+    console.error(err);
+    setLive(false, "연결 오류");
+    const b=document.getElementById("setupBanner");
+    b.style.display="block";
+    b.innerHTML = "⚠️ Firebase 초기화에 실패했습니다. FIREBASE_CONFIG 값과 Firestore/Authentication 설정을 확인하세요.";
+  }
+}
+init();
+</script>
+</body>
+</html>
