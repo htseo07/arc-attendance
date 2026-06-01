@@ -296,7 +296,7 @@ function renderBoard(){
   document.getElementById("boardDate").textContent = state.today;
   const sumEl = document.getElementById("boardSum");
   const gridEl = document.getElementById("boardGrid");
-  const counts = { in:0, out:0, field:0, none:0 };
+  const counts = { none:0 }; PRESENCE.forEach(p=>counts[p.key]=0);
   state.roster.forEach(st=>{ const p=state.presence[st.id]; if(p&&counts[p]!==undefined) counts[p]++; else counts.none++; });
   sumEl.innerHTML =
     PRESENCE.map(p=>`<span class="psum"><i style="background:var(${p.v})"></i>${p.label} ${counts[p.key]}</span>`).join("")
