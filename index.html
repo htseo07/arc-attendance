@@ -32,8 +32,8 @@
 :root{
   --bg:#0a0c10; --panel:#12151b; --panel-2:#161a22; --line:#242a34; --line-2:#2f3744;
   --txt:#e9edf3; --txt-2:#9aa4b2; --txt-3:#626d7d; --accent:#c2f24a; --accent-dim:#8ba830;
-  --s-present:#34d399; --s-late:#f5b73d; --s-trip:#46b6f0; --s-personal:#a98bf5; --s-absent:#f0617a;
-  --p-in:#34d399; --p-out:#626d7d; --p-field:#46b6f0; --p-oncampus:#f5b73d;
+  --s-present:#34d399; --s-late:#f5b73d; --s-remote:#5eead4; --s-trip:#46b6f0; --s-personal:#a98bf5; --s-absent:#f0617a;
+  --p-in:#34d399; --p-out:#626d7d; --p-field:#f5b73d; --p-oncampus:#46b6f0;
 }
 *{box-sizing:border-box;}
 body{
@@ -84,9 +84,9 @@ body::before{
 .pbtn{flex:1; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--txt-2); padding:7px 2px; font-size:12px; font-family:'IBM Plex Sans KR',sans-serif; transition:.12s; white-space:nowrap;}
 .pbtn:hover{border-color:var(--line-2); color:var(--txt);}
 .pbtn.on-in{background:var(--p-in); color:#05140d; border-color:var(--p-in); font-weight:700;}
-.pbtn.on-oncampus{background:var(--p-oncampus); color:#1a1303; border-color:var(--p-oncampus); font-weight:700;}
+.pbtn.on-oncampus{background:var(--p-oncampus); color:#04121c; border-color:var(--p-oncampus); font-weight:700;}
 .pbtn.on-out{background:var(--p-out); color:#0b0d10; border-color:var(--p-out); font-weight:700;}
-.pbtn.on-field{background:var(--p-field); color:#04121c; border-color:var(--p-field); font-weight:700;}
+.pbtn.on-field{background:var(--p-field); color:#1a1303; border-color:var(--p-field); font-weight:700;}
 .pbtn.on-lecture{background:var(--p-lecture); color:#1f1206; border-color:var(--p-lecture); font-weight:700;}
 .pbtn.on-meeting{background:var(--p-meeting); color:#22041a; border-color:var(--p-meeting); font-weight:700;}
 .board-empty{color:var(--txt-3); font-size:13px; padding:8px 0;}
@@ -112,6 +112,10 @@ body::before{
 .cell .dn{font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--txt-2);}
 .cell.today .dn{color:var(--accent); font-weight:700;}
 .cell.sun .dn{color:#e06b80;} .cell.sat .dn{color:#6bb6e0;}
+.cell.off{background:repeating-linear-gradient(135deg, rgba(255,255,255,0.015) 0 7px, transparent 7px 14px), var(--panel); border-style:dashed; opacity:.72;}
+.cell.off:hover{opacity:1;}
+.cell .hol{font-size:10px; color:var(--txt-3); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.cell.sun .hol{color:#cf6275;}
 .daydots{display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;}
 .dchip{display:inline-flex; align-items:center; gap:3px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--txt-2); background:rgba(255,255,255,.03); border-radius:5px; padding:2px 5px;}
 .dchip i{width:6px; height:6px; border-radius:50%;}
@@ -132,6 +136,7 @@ body::before{
 .ssid{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--txt-3);}
 .statebar{display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end;}
 .st{cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--txt-2); padding:6px 9px; font-size:12px; font-family:'IBM Plex Sans KR',sans-serif; transition:.12s; white-space:nowrap;}
+.st-gap{flex-basis:14px;}
 .st:hover{border-color:var(--line-2); color:var(--txt);}
 
 .btn{cursor:pointer; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#0c1003; font-weight:700; padding:10px 16px; font-size:14px; font-family:'IBM Plex Sans KR',sans-serif; transition:.15s;}
@@ -226,6 +231,7 @@ const STATUS = [
   { key:"present",  label:"출석",     v:"--s-present" },
   { key:"late",     label:"지각",     v:"--s-late" },
   { key:"trip",     label:"출장",     v:"--s-trip" },
+  { key:"remote",   label:"재택",     v:"--s-remote" },
   { key:"personal", label:"개인사정", v:"--s-personal" },
   { key:"absent",   label:"결석",     v:"--s-absent" },
 ];
@@ -236,6 +242,22 @@ const PRESENCE = [
   { key:"out",      label:"퇴근", cls:"on-out",      v:"--p-out" },
 ];
 const PMETA = Object.fromEntries(PRESENCE.map(p=>[p.key,p]));
+
+// 2026 대한민국 공휴일(+근로자의날, 대체공휴일 포함). 필요시 직접 수정하세요.
+const HOLIDAYS = {
+  "2026-01-01":"신정",
+  "2026-02-16":"설날", "2026-02-17":"설날", "2026-02-18":"설날",
+  "2026-03-01":"삼일절", "2026-03-02":"대체공휴일",
+  "2026-05-01":"근로자의날", "2026-05-05":"어린이날",
+  "2026-05-24":"부처님오신날", "2026-05-25":"대체공휴일",
+  "2026-06-03":"지방선거", "2026-06-06":"현충일",
+  "2026-08-15":"광복절", "2026-08-17":"대체공휴일",
+  "2026-09-24":"추석", "2026-09-25":"추석", "2026-09-26":"추석", "2026-09-28":"대체공휴일",
+  "2026-10-03":"개천절", "2026-10-05":"대체공휴일", "2026-10-09":"한글날",
+  "2026-12-25":"성탄절",
+};
+function isWeekend(date){ const [y,m,d]=date.split("-").map(Number); const w=new Date(y,m-1,d).getDay(); return w===0||w===6; }
+function isOff(date){ return isWeekend(date) || !!HOLIDAYS[date]; }
 
 const pad = n => String(n).padStart(2,"0");
 const dStr = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
@@ -268,7 +290,8 @@ function dayRecsFor(date){ const m={}; state.monthRows.forEach(r=>{ if(r.date===
 
 function renderLegend(){
   document.getElementById("legend").innerHTML =
-    STATUS.map(s=>`<span><i style="background:var(${s.v})"></i>${s.label}</span>`).join("");
+    STATUS.map(s=>`<span><i style="background:var(${s.v})"></i>${s.label}</span>`).join("")
+    + `<span style="color:var(--txt-3)"><i style="background:repeating-linear-gradient(135deg,#3a4250 0 3px,transparent 3px 6px);border:1px dashed var(--line-2)"></i>주말·공휴일 (체크 불필요)</span>`;
 }
 function renderCalendar(){
   const {y,m} = state.cursor;
@@ -286,8 +309,11 @@ function renderCalendar(){
     const data = state.monthData[date] || {};
     const dots = STATUS.filter(s=>data[s.key])
       .map(s=>`<span class="dchip"><i style="background:var(${s.v})"></i>${data[s.key]}</span>`).join("");
-    html += `<div class="cell ${date===today?'today':''} ${wd===0?'sun':wd===6?'sat':''}" data-date="${date}">
-      <div class="dn">${d}</div><div class="daydots">${dots}</div></div>`;
+    const holiday = HOLIDAYS[date];
+    const off = isOff(date);
+    const tag = holiday ? `<div class="hol">${holiday}</div>` : (isWeekend(date) ? `<div class="hol">휴무</div>` : "");
+    html += `<div class="cell ${date===today?'today':''} ${off?'off':''} ${wd===0||holiday?'sun':wd===6?'sat':''}" data-date="${date}">
+      <div class="dn">${d}</div>${tag}<div class="daydots">${dots}</div></div>`;
   }
   document.getElementById("calGrid").innerHTML = html;
 }
@@ -389,10 +415,11 @@ function renderDay(){
     ? `<p class="empty">등록된 학생이 없습니다. 우측 하단 관리자 메뉴에서 명단을 추가하세요.</p>`
     : state.roster.map(st=>{
         const cur = state.dayRecs[st.id];
-        const btns = STATUS.map(s=>{
+        const btns = STATUS.map((s,i)=>{
           const on = cur===s.key;
           const style = on ? `style="background:var(${s.v});color:#0b0d10;border-color:var(${s.v});font-weight:700"` : "";
-          return `<button class="st" ${style} data-sid="${st.id}" data-status="${s.key}">${s.label}</button>`;
+          const gap = i===2 ? `<span class="st-gap"></span>` : "";
+          return `<button class="st" ${style} data-sid="${st.id}" data-status="${s.key}">${s.label}</button>${gap}`;
         }).join("");
         return `<div class="srow"><div><div class="sname">${esc(st.name)}</div>${st.sid?`<div class="ssid">${esc(st.sid)}</div>`:""}</div>
           <div class="statebar">${btns}</div></div>`;
@@ -500,15 +527,16 @@ async function renderStats(){
       snap.forEach(d=>{ const v=d.data(); rows.push({date:v.date, sid:v.sid, status:v.status}); });
     }catch(e){ console.error(e); }
   }
+  const blank = ()=>{ const o={}; STATUS.forEach(s=>o[s.key]=0); return o; };
   const bySid={}; const dateSet=new Set();
   rows.forEach(r=>{ dateSet.add(r.date);
-    if(!bySid[r.sid]) bySid[r.sid]={present:0,late:0,trip:0,personal:0,absent:0};
+    if(!bySid[r.sid]) bySid[r.sid]=blank();
     if(bySid[r.sid][r.status]!==undefined) bySid[r.sid][r.status]++; });
   const list = state.roster.length===0 ? `<p class="empty">명단이 비어 있습니다.</p>`
     : state.roster.map(st=>{
-        const c = bySid[st.id] || {present:0,late:0,trip:0,personal:0,absent:0};
-        const total = c.present+c.late+c.trip+c.personal+c.absent;
-        const rate = total ? Math.round(((c.present+c.late+c.trip)/total)*100) : 0;
+        const c = bySid[st.id] || blank();
+        const total = STATUS.reduce((a,s)=>a+c[s.key],0);
+        const rate = total ? Math.round(((c.present+c.late+c.remote+c.trip)/total)*100) : 0;
         const pills = STATUS.map(s=>`<span class="pill"><i style="background:var(${s.v})"></i>${s.label} ${c[s.key]}</span>`).join("");
         return `<div style="padding:14px 2px;border-bottom:1px solid var(--line)">
           <div style="display:flex;justify-content:space-between;align-items:baseline">
@@ -523,7 +551,7 @@ async function renderStats(){
       <div class="mlabel">${y}년 ${m+1}월</div>
       <div class="mnav"><button id="statNext">›</button></div>
     </div>
-    <p class="muted" style="margin-bottom:16px">이 달 기록된 날짜 <b class="mono">${dateSet.size}</b>일 · 출근율 = (출석+지각+출장) / 기록 일수</p>
+    <p class="muted" style="margin-bottom:16px">이 달 기록된 날짜 <b class="mono">${dateSet.size}</b>일 · 출근율 = (출석+지각+재택+출장) / 기록 일수</p>
     ${list}`;
   document.getElementById("statPrev").onclick = ()=>{ let {y,m}=state.statCursor; m--; if(m<0){m=11;y--;} state.statCursor={y,m}; renderStats(); };
   document.getElementById("statNext").onclick = ()=>{ let {y,m}=state.statCursor; m++; if(m>11){m=0;y++;} state.statCursor={y,m}; renderStats(); };
